@@ -9,8 +9,7 @@ import Foundation
 import HealthKit
 
 protocol StepDataProviding {
-    var authorizationState: StepAuthorizationState { get }
-
+    func authorizationState() async -> StepAuthorizationState
     func requestAuthorization() async throws -> StepAuthorizationState
     func fetchSnapshot(for profile: UserProfile) async throws -> StepSnapshot
 }
@@ -19,21 +18,24 @@ struct HealthKitStepDataService: StepDataProviding {
     private let healthStore = HKHealthStore()
     private let calendar = Calendar.current
 
-    var authorizationState: StepAuthorizationState {
+    func authorizationState() async -> StepAuthorizationState {
         guard HKHealthStore.isHealthDataAvailable() else {
             return .unavailable
         }
 
-        let status = healthStore.authorizationStatus(for: stepType)
-        switch status {
-        case .notDetermined:
+        let requestStatus = await withCheckedContinuation { (continuation: CheckedContinuation<HKAuthorizationRequestStatus, Never>) in
+            healthStore.getRequestStatusForAuthorization(toShare: Set<HKSampleType>(), read: [stepType]) { status, _ in
+                continuation.resume(returning: status)
+            }
+        }
+
+        switch requestStatus {
+        case .shouldRequest:
             return .notDetermined
-        case .sharingDenied:
-            return .denied
-        case .sharingAuthorized:
-            return .authorized
+        case .unnecessary, .unknown:
+            return .readyToQuery
         @unknown default:
-            return .notDetermined
+            return .readyToQuery
         }
     }
 
@@ -47,7 +49,10 @@ struct HealthKitStepDataService: StepDataProviding {
                 if let error {
                     continuation.resume(throwing: error)
                 } else {
-                    continuation.resume(returning: authorizationState)
+                    Task {
+                        let state = await authorizationState()
+                        continuation.resume(returning: state)
+                    }
                 }
             }
         }

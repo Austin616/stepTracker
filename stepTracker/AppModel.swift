@@ -29,7 +29,7 @@ final class AppModel: ObservableObject {
     init(stepDataService: StepDataProviding? = nil) {
         let resolvedService = stepDataService ?? HealthKitStepDataService()
         self.stepDataService = resolvedService
-        authorizationState = resolvedService.authorizationState
+        authorizationState = .notDetermined
         snapshot = StepSnapshot.empty
     }
 
@@ -85,9 +85,9 @@ final class AppModel: ObservableObject {
     func prepareIfNeeded() async {
         guard !hasPrepared else { return }
         hasPrepared = true
-        authorizationState = stepDataService.authorizationState
+        authorizationState = await stepDataService.authorizationState()
 
-        if authorizationState == .authorized {
+        if authorizationState == .readyToQuery {
             await refresh()
         }
     }
@@ -100,7 +100,7 @@ final class AppModel: ObservableObject {
             authorizationState = try await stepDataService.requestAuthorization()
             isLoading = false
 
-            if authorizationState == .authorized {
+            if authorizationState == .readyToQuery {
                 await refresh()
             }
         } catch {
@@ -110,14 +110,14 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() async {
-        guard authorizationState == .authorized else { return }
+        guard authorizationState == .readyToQuery else { return }
 
         isLoading = true
         errorMessage = nil
 
         do {
             snapshot = try await stepDataService.fetchSnapshot(for: profile)
-            authorizationState = stepDataService.authorizationState
+            authorizationState = await stepDataService.authorizationState()
         } catch {
             errorMessage = "Unable to load your latest steps."
         }

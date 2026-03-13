@@ -8,10 +8,14 @@
 import Foundation
 
 struct PreviewStepDataService: StepDataProviding {
-    var authorizationState: StepAuthorizationState = .authorized
+    var previewAuthorizationState: StepAuthorizationState = .readyToQuery
+
+    func authorizationState() async -> StepAuthorizationState {
+        previewAuthorizationState
+    }
 
     func requestAuthorization() async throws -> StepAuthorizationState {
-        authorizationState
+        previewAuthorizationState
     }
 
     func fetchSnapshot(for profile: UserProfile) async throws -> StepSnapshot {

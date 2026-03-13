@@ -60,8 +60,7 @@ struct ProfileView: View {
 
     private var profileHealthStatus: String {
         switch appModel.authorizationState {
-        case .authorized: return "Connected"
-        case .denied: return "Denied"
+        case .readyToQuery: return "Ready"
         case .notDetermined: return "Not connected"
         case .unavailable: return "Unavailable"
         }

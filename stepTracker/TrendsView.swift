@@ -14,7 +14,7 @@ struct TrendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if appModel.authorizationState == .authorized {
+                if appModel.authorizationState == .readyToQuery {
                     Picker("Range", selection: $appModel.selectedTrendRange) {
                         ForEach(TrendRange.allCases) { range in
                             Text(range.rawValue).tag(range)

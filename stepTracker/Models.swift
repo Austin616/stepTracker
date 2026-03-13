@@ -63,6 +63,5 @@ enum TrendRange: String, CaseIterable, Identifiable {
 enum StepAuthorizationState: Equatable {
     case unavailable
     case notDetermined
-    case denied
-    case authorized
+    case readyToQuery
 }
