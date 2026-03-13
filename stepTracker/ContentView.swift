@@ -8,17 +8,41 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var appModel: AppModel
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            Tab("Home", systemImage: "figure.walk") {
+                NavigationStack {
+                    HomeView()
+                }
+            }
+
+            Tab("Trends", systemImage: "chart.xyaxis.line") {
+                NavigationStack {
+                    TrendsView()
+                }
+            }
+
+            Tab("Friends", systemImage: "person.2.fill") {
+                NavigationStack {
+                    FriendsView()
+                }
+            }
+
+            Tab("Profile", systemImage: "person.crop.circle") {
+                NavigationStack {
+                    ProfileView()
+                }
+            }
         }
-        .padding()
+        .tint(appModel.accentColor)
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environmentObject(AppModel())
+    }
 }
