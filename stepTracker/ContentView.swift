@@ -37,12 +37,15 @@ struct ContentView: View {
             }
         }
         .tint(appModel.accentColor)
+        .task {
+            await appModel.prepareIfNeeded()
+        }
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .environmentObject(AppModel())
+            .environmentObject(AppModel(stepDataService: PreviewStepDataService()))
     }
 }

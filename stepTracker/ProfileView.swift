@@ -16,7 +16,7 @@ struct ProfileView: View {
                 HStack(spacing: 16) {
                     Circle()
                         .fill(appModel.accentColor)
-                        .frame(width: 56, height: 56)
+                        .frame(width: 60, height: 60)
                         .overlay {
                             Text(appModel.profile.initials)
                                 .font(.headline.bold())
@@ -26,7 +26,7 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(appModel.profile.name)
                             .font(.title3.bold())
-                        Text(appModel.isSignedIn ? "Signed in for social features" : "Using guest mode")
+                        Text(appModel.isSignedIn ? "Signed in for social features" : "Guest mode")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -35,8 +35,8 @@ struct ProfileView: View {
 
             Section("Tracker") {
                 LabeledContent("Daily goal", value: "\(appModel.dailyGoal.formatted()) steps")
-                LabeledContent("Health access", value: "Not connected yet")
-                LabeledContent("Default mode", value: "Guest-friendly")
+                LabeledContent("Health status", value: profileHealthStatus)
+                LabeledContent("Tracker mode", value: "Local-first")
             }
 
             Section("Account") {
@@ -46,7 +46,25 @@ struct ProfileView: View {
                 .foregroundStyle(appModel.accentColor)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(
+            LinearGradient(
+                colors: [appModel.backgroundTop, appModel.backgroundBottom],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
         .navigationTitle("Profile")
+    }
+
+    private var profileHealthStatus: String {
+        switch appModel.authorizationState {
+        case .authorized: return "Connected"
+        case .denied: return "Denied"
+        case .notDetermined: return "Not connected"
+        case .unavailable: return "Unavailable"
+        }
     }
 }
 
@@ -54,7 +72,7 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
             ProfileView()
-                .environmentObject(AppModel())
+                .environmentObject(AppModel(stepDataService: PreviewStepDataService()))
         }
     }
 }

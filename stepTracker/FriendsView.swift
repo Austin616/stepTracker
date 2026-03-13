@@ -18,36 +18,39 @@ struct FriendsView: View {
                 guestView
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(backgroundGradient.ignoresSafeArea())
         .navigationTitle("Friends")
     }
 
     private var guestView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Compare steps with your friends once you sign in.")
-                    .font(.title2.bold())
-
-                Text("Guest mode keeps the tracker fully usable. Social features are optional and can be unlocked any time.")
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Daily leaderboard", systemImage: "list.number")
-                    Label("Weekly rankings", systemImage: "chart.bar")
-                    Label("Friendly step competitions", systemImage: "figure.run")
+                StepCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Social is optional")
+                            .font(.title2.bold())
+                        Text("You can track steps as a guest. Sign in only when you want rankings, friend comparisons, or shared challenges.")
+                            .foregroundStyle(.secondary)
+                        Button("Sign in to unlock friends") {
+                            appModel.toggleSignIn()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(appModel.accentColor)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-                .background(.background, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                Button("Sign in to unlock friends") {
-                    appModel.toggleSignIn()
+                StepCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("What this tab will do")
+                            .font(.title3.bold())
+                        Label("Daily leaderboard", systemImage: "list.number")
+                        Label("Weekly rankings", systemImage: "chart.bar")
+                        Label("Simple step competitions", systemImage: "figure.run")
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(appModel.accentColor)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
         }
     }
 
@@ -62,7 +65,7 @@ struct FriendsView: View {
                     .frame(width: 32)
 
                 Circle()
-                    .fill(friend.isCurrentUser ? appModel.accentColor : Color.secondary.opacity(0.18))
+                    .fill(friend.isCurrentUser ? appModel.accentColor : Color.secondary.opacity(0.16))
                     .frame(width: 42, height: 42)
                     .overlay {
                         Text(friend.initials)
@@ -87,6 +90,7 @@ struct FriendsView: View {
             .listRowBackground(friend.isCurrentUser ? appModel.accentColor.opacity(0.12) : nil)
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom) {
             Button("Sign out of social mode") {
                 appModel.toggleSignIn()
@@ -97,13 +101,21 @@ struct FriendsView: View {
             .background(.thinMaterial)
         }
     }
+
+    private var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [appModel.backgroundTop, appModel.backgroundBottom],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 struct FriendsView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
             FriendsView()
-                .environmentObject(AppModel())
+                .environmentObject(AppModel(stepDataService: PreviewStepDataService()))
         }
     }
 }
