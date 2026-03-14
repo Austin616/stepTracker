@@ -52,6 +52,26 @@ struct StepSnapshot: Equatable {
     )
 }
 
+struct TrendSnapshot: Equatable {
+    let range: TrendRange
+    let periodStart: Date
+    let periodEnd: Date
+    let totalSteps: Int
+    let hourlySteps: [HourStepTotal]
+    let dailySteps: [DayStepTotal]
+
+    static func empty(range: TrendRange) -> TrendSnapshot {
+        TrendSnapshot(
+            range: range,
+            periodStart: .now,
+            periodEnd: .now,
+            totalSteps: 0,
+            hourlySteps: [],
+            dailySteps: []
+        )
+    }
+}
+
 enum TrendRange: String, CaseIterable, Identifiable {
     case day = "Day"
     case week = "Week"

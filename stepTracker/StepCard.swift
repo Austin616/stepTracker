@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct StepCard<Content: View>: View {
+    @EnvironmentObject private var appModel: AppModel
     let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -20,8 +21,12 @@ struct StepCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.white.opacity(0.92))
-                    .shadow(color: Color.black.opacity(0.06), radius: 18, y: 8)
+                    .fill(appModel.surfaceColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(appModel.isDarkTheme ? Color.white.opacity(0.05) : Color.clear, lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(appModel.isDarkTheme ? 0.22 : 0.06), radius: 18, y: 8)
             )
     }
 }

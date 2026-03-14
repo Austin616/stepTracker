@@ -19,7 +19,6 @@ struct HomeView: View {
 
                 if appModel.authorizationState == .readyToQuery {
                     ringSection
-                    quickStatsSection
                     hourlySection
                     socialSection
                 } else {
@@ -30,21 +29,13 @@ struct HomeView: View {
             .padding(.top, 16)
             .padding(.bottom, 36)
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .background(appModel.backgroundColor.ignoresSafeArea())
         .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if appModel.authorizationState == .readyToQuery {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        selectedHourIndex = nil
-                        Task { await appModel.refresh() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .disabled(appModel.isLoading)
-                }
-            }
+        .refreshable {
+            guard appModel.authorizationState == .readyToQuery else { return }
+            selectedHourIndex = nil
+            await appModel.refresh()
         }
     }
 
@@ -81,30 +72,6 @@ struct HomeView: View {
         }
     }
 
-    private var quickStatsSection: some View {
-        HStack(spacing: 16) {
-            quickStat(title: "Peak hour", value: appModel.bestHour?.hourLabel ?? "--")
-            quickStat(title: "Weekly avg", value: appModel.weeklyAverage.formatted())
-            quickStat(title: "Best day", value: appModel.busiestDay?.label ?? "--")
-        }
-    }
-
-    private func quickStat(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(0.5)
-
-            Text(value)
-                .font(.title3.weight(.semibold))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 14)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
     private var hourlySection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -137,6 +104,29 @@ struct HomeView: View {
                 )
                 .foregroundStyle(barColor(for: index))
                 .cornerRadius(6)
+            }
+
+            RuleMark(y: .value("Average Pace", averageHourlyPace))
+                .foregroundStyle(Color.secondary.opacity(0.45))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .annotation(position: .top, alignment: .leading) {
+                    if selectedHourIndex == nil {
+                        Text("Avg")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+            if let peakHour, let peakHourIndex, selectedHourIndex == nil {
+                PointMark(
+                    x: .value("Peak Hour", peakHourIndex),
+                    y: .value("Steps", peakHour.steps)
+                )
+                .foregroundStyle(appModel.accentColor)
+                .symbolSize(85)
+                .annotation(position: .top) {
+                    chartBadge(title: "Peak hour", value: "\(peakHour.steps.formatted())")
+                }
             }
 
             if let selectedHour {
@@ -184,7 +174,9 @@ struct HomeView: View {
                                 let clampedIndex = min(max(rawIndex, 0), appModel.hourlySteps.count - 1)
                                 selectedHourIndex = clampedIndex
                             }
-                            .onEnded { _ in }
+                            .onEnded { _ in
+                                selectedHourIndex = nil
+                            }
                     )
             }
         }
@@ -247,7 +239,7 @@ struct HomeView: View {
             .disabled(appModel.isLoading || appModel.authorizationState == .unavailable)
         }
         .padding(24)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     private var selectedHour: HourStepTotal? {
@@ -257,12 +249,12 @@ struct HomeView: View {
     }
 
     private var selectedHourSummaryTitle: String {
-        selectedHour == nil ? "Long press a bar" : "Selected interval"
+        selectedHour == nil ? "Press and drag" : "Selected interval"
     }
 
     private var selectedHourTitle: String {
         guard let selectedHour, let selectedHourIndex else {
-            return appModel.bestHour.map { "Peak hour: \($0.hourLabel)" } ?? "Your hourly pattern"
+            return "Your hourly pattern"
         }
 
         return hourRangeLabel(for: selectedHourIndex, fallback: selectedHour.hourLabel)
@@ -270,7 +262,7 @@ struct HomeView: View {
 
     private var selectedHourSubtitle: String {
         guard let selectedHour else {
-            return "Press and drag across the chart to inspect how many steps you took during each hour."
+            return "\(Int(appModel.todayProgress * 100))% of goal • Peak hour is highlighted on the chart."
         }
 
         let percent = appModel.todaySteps > 0 ? Int((Double(selectedHour.steps) / Double(appModel.todaySteps)) * 100) : 0
@@ -294,6 +286,13 @@ struct HomeView: View {
     }
 
     private func barColor(for index: Int) -> Color {
+        if selectedHourIndex == nil {
+            if let peakHourIndex, index == peakHourIndex {
+                return appModel.accentColor
+            }
+            return appModel.accentColor.opacity(0.68)
+        }
+
         if selectedHourIndex == index {
             return appModel.accentColor
         }
@@ -322,6 +321,33 @@ struct HomeView: View {
         case .unavailable: return "Unavailable on this device"
         case .readyToQuery: return "Connected"
         }
+    }
+
+    private func chartBadge(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var peakHourIndex: Int? {
+        guard !appModel.hourlySteps.isEmpty else { return nil }
+        return appModel.hourlySteps.enumerated().max(by: { $0.element.steps < $1.element.steps })?.offset
+    }
+
+    private var peakHour: HourStepTotal? {
+        guard let peakHourIndex, appModel.hourlySteps.indices.contains(peakHourIndex) else { return nil }
+        return appModel.hourlySteps[peakHourIndex]
+    }
+
+    private var averageHourlyPace: Double {
+        Double(appModel.todaySteps) / 24.0
     }
 }
 

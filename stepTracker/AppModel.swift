@@ -10,28 +10,65 @@ import SwiftUI
 
 @MainActor
 final class AppModel: ObservableObject {
+    @Published var selectedTheme: AppTheme {
+        didSet {
+            UserDefaults.standard.set(selectedTheme.rawValue, forKey: Self.themeDefaultsKey)
+            if usesCustomTheme {
+                usesCustomTheme = false
+            }
+        }
+    }
+    @Published var usesCustomTheme: Bool {
+        didSet {
+            UserDefaults.standard.set(usesCustomTheme, forKey: Self.customThemeEnabledKey)
+        }
+    }
     @Published var isSignedIn = false
     @Published var dailyGoal = 10_000
     @Published var selectedTrendRange: TrendRange = .day
     @Published private(set) var authorizationState: StepAuthorizationState
     @Published private(set) var snapshot: StepSnapshot
+    @Published private(set) var trendOffsets: [TrendRange: Int] = [.day: 0, .week: 0, .month: 0]
+    @Published private(set) var trendSnapshots: [TrendRange: TrendSnapshot] = [:]
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    private var customTheme: CustomThemeData {
+        didSet {
+            if let encoded = try? JSONEncoder().encode(customTheme) {
+                UserDefaults.standard.set(encoded, forKey: Self.customThemeDataKey)
+            }
+        }
+    }
 
     let profile = UserProfile(name: "Austin", initials: "AT")
-    let accentColor = Color(red: 0.05, green: 0.69, blue: 0.56)
-    let backgroundTop = Color(red: 0.97, green: 0.99, blue: 0.98)
-    let backgroundBottom = Color(red: 0.90, green: 0.96, blue: 0.93)
 
     private let stepDataService: StepDataProviding
     private var hasPrepared = false
+    private static let themeDefaultsKey = "selectedTheme"
+    private static let customThemeEnabledKey = "usesCustomTheme"
+    private static let customThemeDataKey = "customThemeData"
 
     init(stepDataService: StepDataProviding? = nil) {
         let resolvedService = stepDataService ?? HealthKitStepDataService()
         self.stepDataService = resolvedService
+        selectedTheme = UserDefaults.standard.string(forKey: Self.themeDefaultsKey).flatMap(AppTheme.init(rawValue:)) ?? .core
+        usesCustomTheme = UserDefaults.standard.bool(forKey: Self.customThemeEnabledKey)
+        if let data = UserDefaults.standard.data(forKey: Self.customThemeDataKey),
+           let decoded = try? JSONDecoder().decode(CustomThemeData.self, from: data) {
+            customTheme = decoded
+        } else {
+            customTheme = .default
+        }
         authorizationState = .notDetermined
         snapshot = StepSnapshot.empty
     }
+
+    var accentColor: Color { usesCustomTheme ? customTheme.accentColor : selectedTheme.accent }
+    var backgroundColor: Color { usesCustomTheme ? customTheme.backgroundColor : selectedTheme.background }
+    var surfaceColor: Color { usesCustomTheme ? customTheme.surfaceColor : selectedTheme.surface }
+    var secondarySurfaceColor: Color { usesCustomTheme ? customTheme.secondarySurfaceColor : selectedTheme.secondarySurface }
+    var preferredColorScheme: ColorScheme { usesCustomTheme ? (customTheme.isDark ? .dark : .light) : selectedTheme.preferredColorScheme }
+    var isDarkTheme: Bool { preferredColorScheme == .dark }
 
     var todaySteps: Int {
         snapshot.todaySteps
@@ -82,6 +119,39 @@ final class AppModel: ObservableObject {
         (leaderboard.firstIndex(where: { $0.name == profile.name }) ?? 0) + 1
     }
 
+    var currentTrendOffset: Int {
+        trendOffsets[selectedTrendRange, default: 0]
+    }
+
+    var currentTrendSnapshot: TrendSnapshot {
+        trendSnapshots[selectedTrendRange] ?? TrendSnapshot.empty(range: selectedTrendRange)
+    }
+
+    var trendHourlySteps: [HourStepTotal] {
+        currentTrendSnapshot.hourlySteps
+    }
+
+    var trendDailySteps: [DayStepTotal] {
+        currentTrendSnapshot.dailySteps
+    }
+
+    var trendTotalSteps: Int {
+        currentTrendSnapshot.totalSteps
+    }
+
+    var trendAverageSteps: Int {
+        switch selectedTrendRange {
+        case .day:
+            return Int(Double(trendTotalSteps) / 24.0)
+        case .week, .month:
+            return trendTotalSteps / max(trendDailySteps.count, 1)
+        }
+    }
+
+    var canMoveTrendForward: Bool {
+        currentTrendOffset < 0
+    }
+
     func prepareIfNeeded() async {
         guard !hasPrepared else { return }
         hasPrepared = true
@@ -89,6 +159,7 @@ final class AppModel: ObservableObject {
 
         if authorizationState == .readyToQuery {
             await refresh()
+            await ensureTrendLoaded(for: selectedTrendRange)
         }
     }
 
@@ -102,6 +173,7 @@ final class AppModel: ObservableObject {
 
             if authorizationState == .readyToQuery {
                 await refresh()
+                await ensureTrendLoaded(for: selectedTrendRange, force: true)
             }
         } catch {
             isLoading = false
@@ -118,6 +190,16 @@ final class AppModel: ObservableObject {
         do {
             snapshot = try await stepDataService.fetchSnapshot(for: profile)
             authorizationState = await stepDataService.authorizationState()
+            if trendOffsets[.day, default: 0] == 0 {
+                trendSnapshots[.day] = TrendSnapshot(
+                    range: .day,
+                    periodStart: Calendar.current.startOfDay(for: .now),
+                    periodEnd: .now,
+                    totalSteps: snapshot.todaySteps,
+                    hourlySteps: snapshot.hourlySteps,
+                    dailySteps: []
+                )
+            }
         } catch {
             errorMessage = "Unable to load your latest steps."
         }
@@ -127,5 +209,81 @@ final class AppModel: ObservableObject {
 
     func toggleSignIn() {
         isSignedIn.toggle()
+    }
+
+    func applyTheme(_ theme: AppTheme) {
+        selectedTheme = theme
+    }
+
+    func applyCustomTheme(accent: Color, background: Color, surface: Color, secondarySurface: Color, isDark: Bool) {
+        customTheme = CustomThemeData(
+            accentHex: accent.hexString,
+            backgroundHex: background.hexString,
+            surfaceHex: surface.hexString,
+            secondarySurfaceHex: secondarySurface.hexString,
+            isDark: isDark
+        )
+        usesCustomTheme = true
+    }
+
+    var customThemeAccent: Color { customTheme.accentColor }
+    var customThemeBackground: Color { customTheme.backgroundColor }
+    var customThemeSurface: Color { customTheme.surfaceColor }
+    var customThemeSecondarySurface: Color { customTheme.secondarySurfaceColor }
+    var customThemeIsDark: Bool { customTheme.isDark }
+
+    func ensureTrendLoaded(for range: TrendRange, force: Bool = false) async {
+        guard authorizationState == .readyToQuery else { return }
+        if !force, trendSnapshots[range] != nil { return }
+        await loadTrend(range: range)
+    }
+
+    func moveTrendPeriod(by delta: Int) async {
+        let nextOffset = min(currentTrendOffset + delta, 0)
+        trendOffsets[selectedTrendRange] = nextOffset
+        await loadTrend(range: selectedTrendRange)
+    }
+
+    func resetTrendPeriodToCurrent() async {
+        trendOffsets[selectedTrendRange] = 0
+        await loadTrend(range: selectedTrendRange)
+    }
+
+    func setTrendPeriod(containing date: Date) async {
+        let calendar = Calendar.current
+        let now = Date()
+        let offset: Int
+
+        switch selectedTrendRange {
+        case .day:
+            offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+        case .week:
+            let nowWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+            let targetWeekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+            offset = calendar.dateComponents([.weekOfYear], from: nowWeekStart, to: targetWeekStart).weekOfYear ?? 0
+        case .month:
+            let nowMonthStart = calendar.dateInterval(of: .month, for: now)?.start ?? now
+            let targetMonthStart = calendar.dateInterval(of: .month, for: date)?.start ?? date
+            offset = calendar.dateComponents([.month], from: nowMonthStart, to: targetMonthStart).month ?? 0
+        }
+
+        trendOffsets[selectedTrendRange] = min(offset, 0)
+        await loadTrend(range: selectedTrendRange)
+    }
+
+    func loadTrend(range: TrendRange) async {
+        guard authorizationState == .readyToQuery else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let offset = trendOffsets[range, default: 0]
+            trendSnapshots[range] = try await stepDataService.fetchTrendSnapshot(range: range, offset: offset)
+        } catch {
+            errorMessage = "Unable to load trend data for this period."
+        }
+
+        isLoading = false
     }
 }

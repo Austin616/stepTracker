@@ -12,6 +12,7 @@ protocol StepDataProviding {
     func authorizationState() async -> StepAuthorizationState
     func requestAuthorization() async throws -> StepAuthorizationState
     func fetchSnapshot(for profile: UserProfile) async throws -> StepSnapshot
+    func fetchTrendSnapshot(range: TrendRange, offset: Int) async throws -> TrendSnapshot
 }
 
 struct HealthKitStepDataService: StepDataProviding {
@@ -80,6 +81,36 @@ struct HealthKitStepDataService: StepDataProviding {
             monthlySteps: month,
             friends: mockFriends(currentUserName: profile.name, currentUserInitials: profile.initials, todaySteps: todaySteps)
         )
+    }
+
+    func fetchTrendSnapshot(range: TrendRange, offset: Int) async throws -> TrendSnapshot {
+        let interval = periodInterval(for: range, offset: offset)
+        let periodEnd = calendar.date(byAdding: .second, value: -1, to: interval.end) ?? interval.end
+
+        switch range {
+        case .day:
+            let hourly = try await hourlyStepTotals(start: interval.start, end: periodEnd)
+            let totalSteps = hourly.reduce(0) { $0 + $1.steps }
+            return TrendSnapshot(
+                range: range,
+                periodStart: interval.start,
+                periodEnd: periodEnd,
+                totalSteps: totalSteps,
+                hourlySteps: hourly,
+                dailySteps: []
+            )
+        case .week, .month:
+            let daily = try await dailyStepTotals(start: interval.start, end: periodEnd)
+            let totalSteps = daily.reduce(0) { $0 + $1.steps }
+            return TrendSnapshot(
+                range: range,
+                periodStart: interval.start,
+                periodEnd: periodEnd,
+                totalSteps: totalSteps,
+                hourlySteps: [],
+                dailySteps: daily
+            )
+        }
     }
 
     private func hourlyStepTotals(start: Date, end: Date) async throws -> [HourStepTotal] {
@@ -196,6 +227,22 @@ struct HealthKitStepDataService: StepDataProviding {
         }
 
         return "\(calendar.component(.day, from: date))"
+    }
+
+    private func periodInterval(for range: TrendRange, offset: Int) -> DateInterval {
+        let referenceDate = Date()
+
+        switch range {
+        case .day:
+            let anchor = calendar.date(byAdding: .day, value: offset, to: referenceDate) ?? referenceDate
+            return calendar.dateInterval(of: .day, for: anchor) ?? DateInterval(start: referenceDate, duration: 86_400)
+        case .week:
+            let anchor = calendar.date(byAdding: .weekOfYear, value: offset, to: referenceDate) ?? referenceDate
+            return calendar.dateInterval(of: .weekOfYear, for: anchor) ?? DateInterval(start: referenceDate, duration: 604_800)
+        case .month:
+            let anchor = calendar.date(byAdding: .month, value: offset, to: referenceDate) ?? referenceDate
+            return calendar.dateInterval(of: .month, for: anchor) ?? DateInterval(start: referenceDate, duration: 2_592_000)
+        }
     }
 
     private var stepType: HKQuantityType {

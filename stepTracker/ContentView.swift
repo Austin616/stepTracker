@@ -37,6 +37,7 @@ struct ContentView: View {
             }
         }
         .tint(appModel.accentColor)
+        .preferredColorScheme(appModel.preferredColorScheme)
         .task {
             await appModel.prepareIfNeeded()
         }

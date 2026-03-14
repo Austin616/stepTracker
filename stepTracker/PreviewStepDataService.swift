@@ -74,6 +74,66 @@ struct PreviewStepDataService: StepDataProviding {
         )
     }
 
+    func fetchTrendSnapshot(range: TrendRange, offset: Int) async throws -> TrendSnapshot {
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch range {
+        case .day:
+            let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: offset, to: now) ?? now)
+            let values = (0..<24).map { hour in
+                max(0, Int(420 + 260 * sin(Double(hour) * 0.55 + Double(offset)) + Double((hour % 5) * 45)))
+            }
+            let hourly = values.enumerated().compactMap { hour, steps -> HourStepTotal? in
+                guard let date = calendar.date(byAdding: .hour, value: hour, to: start) else { return nil }
+                return HourStepTotal(date: date, hourLabel: hourLabel(for: hour), steps: steps)
+            }
+            return TrendSnapshot(
+                range: range,
+                periodStart: start,
+                periodEnd: calendar.date(byAdding: .second, value: 86_399, to: start) ?? start,
+                totalSteps: hourly.reduce(0) { $0 + $1.steps },
+                hourlySteps: hourly,
+                dailySteps: []
+            )
+        case .week:
+            let anchor = calendar.date(byAdding: .weekOfYear, value: offset, to: now) ?? now
+            let interval = calendar.dateInterval(of: .weekOfYear, for: anchor) ?? DateInterval(start: now, duration: 604_800)
+            let daily = (0..<7).compactMap { day -> DayStepTotal? in
+                guard let date = calendar.date(byAdding: .day, value: day, to: interval.start) else { return nil }
+                let formatter = DateFormatter()
+                formatter.dateFormat = "E"
+                let steps = max(0, Int(7_500 + 1_800 * sin(Double(day + (offset * 2)))))
+                return DayStepTotal(date: date, label: formatter.string(from: date), steps: steps)
+            }
+            return TrendSnapshot(
+                range: range,
+                periodStart: interval.start,
+                periodEnd: calendar.date(byAdding: .second, value: -1, to: interval.end) ?? interval.end,
+                totalSteps: daily.reduce(0) { $0 + $1.steps },
+                hourlySteps: [],
+                dailySteps: daily
+            )
+        case .month:
+            let anchor = calendar.date(byAdding: .month, value: offset, to: now) ?? now
+            let interval = calendar.dateInterval(of: .month, for: anchor) ?? DateInterval(start: now, duration: 2_592_000)
+            let dayCount = calendar.range(of: .day, in: .month, for: interval.start)?.count ?? 30
+            let daily = (0..<dayCount).compactMap { day -> DayStepTotal? in
+                guard let date = calendar.date(byAdding: .day, value: day, to: interval.start) else { return nil }
+                let steps = max(0, Int(7_900 + 1_700 * sin(Double(day) * 0.45 + Double(offset))))
+                return DayStepTotal(date: date, label: "\(calendar.component(.day, from: date))", steps: steps)
+            }
+            return TrendSnapshot(
+                range: range,
+                periodStart: interval.start,
+                periodEnd: calendar.date(byAdding: .second, value: -1, to: interval.end) ?? interval.end,
+                totalSteps: daily.reduce(0) { $0 + $1.steps },
+                hourlySteps: [],
+                dailySteps: daily
+            )
+        }
+    }
+
     private func hourLabel(for hour: Int) -> String {
         switch hour {
         case 0: return "12a"
