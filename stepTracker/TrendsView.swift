@@ -17,24 +17,29 @@ struct TrendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                header
+                SignalHeader(
+                    eyebrow: "ANALYTICS",
+                    title: "Movement trends",
+                    subtitle: "Navigate across time and inspect your movement like a signal."
+                )
 
                 if appModel.authorizationState == .readyToQuery {
-                    rangePicker
-                    periodNavigation
+                    rangeStrip
+                    periodStrip
                     detailSection
                     chartSection
                 } else {
-                    lockedSection
+                    lockedPanel
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 36)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 40)
         }
-        .background(appModel.backgroundColor.ignoresSafeArea())
-        .navigationTitle("Trends")
+        .background(SignalBackground())
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task(id: appModel.selectedTrendRange) {
             await appModel.ensureTrendLoaded(for: appModel.selectedTrendRange)
             pendingDate = appModel.currentTrendSnapshot.periodStart
@@ -53,8 +58,15 @@ struct TrendsView: View {
                             pendingDate = appModel.currentTrendSnapshot.periodStart
                         }
                     }
+                    .font(.system(size: 14, weight: .semibold, design: .default))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.78 : 0.84))
+                    )
                     .disabled(!appModel.canMoveTrendForward)
-                    .opacity(appModel.canMoveTrendForward ? 1 : 0.5)
+                    .opacity(appModel.canMoveTrendForward ? 1 : 0.45)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -63,6 +75,12 @@ struct TrendsView: View {
                         isShowingCalendar = true
                     } label: {
                         Image(systemName: "calendar")
+                            .font(.system(size: 15, weight: .semibold, design: .default))
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.78 : 0.84))
+                            )
                     }
                 }
             }
@@ -72,62 +90,254 @@ struct TrendsView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Movement trends")
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Inspect your activity by hour, day, and longer-term patterns.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var rangePicker: some View {
-        Picker("Range", selection: $appModel.selectedTrendRange) {
+    private var rangeStrip: some View {
+        HStack(spacing: 8) {
             ForEach(TrendRange.allCases) { range in
-                Text(range.rawValue).tag(range)
+                Button {
+                    appModel.selectedTrendRange = range
+                } label: {
+                    SignalChip(title: range.rawValue, isSelected: appModel.selectedTrendRange == range)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.segmented)
     }
 
-    private var periodNavigation: some View {
+    private var periodStrip: some View {
         HStack {
-            Button {
+            navButton(systemName: "chevron.left") {
                 Task {
                     selectedIndex = nil
                     await appModel.moveTrendPeriod(by: -1)
                 }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.headline.weight(.semibold))
-                    .frame(width: 36, height: 36)
-                    .background(appModel.secondarySurfaceColor, in: Circle())
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
-            Text(periodTitle)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+            VStack(spacing: 4) {
+                Text("PERIOD")
+                    .font(.system(size: 10, weight: .semibold, design: .default))
+                    .tracking(1.8)
+                    .foregroundStyle(appModel.accentColor)
+                Text(periodTitle)
+                    .font(.system(size: 19, weight: .bold, design: .default))
+                    .monospacedDigit()
+            }
 
             Spacer()
 
-            Button {
+            navButton(systemName: "chevron.right", disabled: !appModel.canMoveTrendForward) {
                 Task {
                     selectedIndex = nil
                     await appModel.moveTrendPeriod(by: 1)
                 }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.headline.weight(.semibold))
-                    .frame(width: 36, height: 36)
-                    .background(appModel.secondarySurfaceColor, in: Circle())
             }
-            .buttonStyle(.plain)
-            .disabled(!appModel.canMoveTrendForward)
-            .opacity(appModel.canMoveTrendForward ? 1 : 0.35)
+        }
+    }
+
+    private func navButton(systemName: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold, design: .default))
+                .frame(width: 42, height: 42)
+                .background(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.92 : 0.98), in: Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.35 : 1)
+    }
+
+    private var detailSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(detailEyebrow)
+                .font(.system(size: 11, weight: .semibold, design: .default))
+                .tracking(2.0)
+                .foregroundStyle(appModel.accentColor)
+
+            Text(detailTitle)
+                .font(.system(size: 42, weight: .bold, design: .default))
+                .monospacedDigit()
+
+            Text(detailSubtitle)
+                .font(.system(size: 15, weight: .medium, design: .default))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            chartView
+
+            Text("Press and drag to inspect each interval.")
+                .font(.system(size: 13, weight: .medium, design: .default))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var chartView: some View {
+        Group {
+            switch appModel.selectedTrendRange {
+            case .day:
+                hourlyChart
+            case .week:
+                dailyChart(values: appModel.trendDailySteps, average: Double(appModel.trendAverageSteps), badgeTitle: "Best day", badgeValue: bestWeekDay?.label ?? "--", bestIndex: bestWeekDayIndex)
+            case .month:
+                dailyChart(values: appModel.trendDailySteps, average: Double(appModel.trendAverageSteps), badgeTitle: "Top day", badgeValue: bestMonthDay?.label ?? "--", bestIndex: bestMonthDayIndex, narrow: true)
+            }
+        }
+    }
+
+    private var hourlyChart: some View {
+        Chart {
+            ForEach(Array(appModel.trendHourlySteps.enumerated()), id: \.element.id) { index, item in
+                BarMark(
+                    x: .value("Hour", index),
+                    y: .value("Steps", item.steps)
+                )
+                .foregroundStyle(barColor(for: index))
+                .cornerRadius(5)
+            }
+
+            RuleMark(y: .value("Average Pace", averageHourlyPace))
+                .foregroundStyle(Color.secondary.opacity(0.35))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+            if let peakHour, let peakHourIndex, selectedIndex == nil {
+                PointMark(
+                    x: .value("Peak Hour", peakHourIndex),
+                    y: .value("Steps", peakHour.steps)
+                )
+                .foregroundStyle(appModel.accentColor)
+                .symbolSize(88)
+                .annotation(position: .top) {
+                    chartBadge(title: "Peak hour", value: peakHour.steps.formatted())
+                }
+            }
+
+            if let selectedHour, let selectedIndex {
+                RuleMark(x: .value("Selected Hour", selectedIndex))
+                    .foregroundStyle(appModel.accentColor.opacity(0.22))
+
+                PointMark(
+                    x: .value("Selected Hour", selectedIndex),
+                    y: .value("Steps", selectedHour.steps)
+                )
+                .foregroundStyle(appModel.accentColor)
+                .symbolSize(80)
+            }
+        }
+        .modifier(CommonChartModifier())
+        .chartXScale(domain: -0.5...23.5)
+        .chartXAxis {
+            AxisMarks(values: [0, 6, 12, 18, 23]) { value in
+                AxisValueLabel {
+                    if let index = value.as(Int.self), index >= 0, index < appModel.trendHourlySteps.count {
+                        Text(appModel.trendHourlySteps[index].hourLabel)
+                    }
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            selectionOverlay(proxy: proxy, itemCount: appModel.trendHourlySteps.count)
+        }
+    }
+
+    private func dailyChart(values: [DayStepTotal], average: Double, badgeTitle: String, badgeValue: String, bestIndex: Int?, narrow: Bool = false) -> some View {
+        let barWidth: CGFloat = narrow ? 7 : 14
+        let cornerRadius: CGFloat = narrow ? 4 : 7
+        let barOpacity = narrow ? 0.95 : 1.0
+
+        return Chart {
+            dailyBarMarks(values: values, narrow: narrow, cornerRadius: cornerRadius, barOpacity: barOpacity, barWidth: barWidth)
+            averageRuleMark(value: average)
+            bestDayMarker(values: values, bestIndex: bestIndex, badgeTitle: badgeTitle, badgeValue: badgeValue)
+            selectedDayMarker(values: values)
+        }
+        .modifier(CommonChartModifier())
+        .chartXScale(domain: -0.5...Double(max(values.count - 1, 0)) + 0.5)
+        .chartXAxis {
+            AxisMarks(values: tickValues(for: values.count)) { value in
+                AxisValueLabel {
+                    if let index = value.as(Int.self), index >= 0, index < values.count {
+                        Text(values[index].label)
+                    }
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            selectionOverlay(proxy: proxy, itemCount: values.count)
+        }
+    }
+
+    private func dailyBarColor(for index: Int, narrow: Bool) -> Color {
+        narrow ? monthBarColor(for: index) : barColor(for: index)
+    }
+
+    @ChartContentBuilder
+    private func dailyBarMarks(values: [DayStepTotal], narrow: Bool, cornerRadius: CGFloat, barOpacity: Double, barWidth: CGFloat) -> some ChartContent {
+        ForEach(Array(values.enumerated()), id: \.element.id) { index, item in
+            BarMark(
+                x: .value("Bucket", index),
+                y: .value("Steps", item.steps)
+            )
+            .foregroundStyle(dailyBarColor(for: index, narrow: narrow))
+            .cornerRadius(cornerRadius)
+            .opacity(barOpacity)
+        }
+    }
+
+    @ChartContentBuilder
+    private func averageRuleMark(value: Double) -> some ChartContent {
+        RuleMark(y: .value("Average", value))
+            .foregroundStyle(Color.secondary.opacity(0.35))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+    }
+
+    @ChartContentBuilder
+    private func bestDayMarker(values: [DayStepTotal], bestIndex: Int?, badgeTitle: String, badgeValue: String) -> some ChartContent {
+        if let bestIndex, selectedIndex == nil, let bestValue = values[safe: bestIndex] {
+            PointMark(
+                x: .value("Best", bestIndex),
+                y: .value("Steps", bestValue.steps)
+            )
+            .foregroundStyle(appModel.accentColor)
+            .symbolSize(88)
+            .annotation(position: .top) {
+                chartBadge(title: badgeTitle, value: badgeValue)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private func selectedDayMarker(values: [DayStepTotal]) -> some ChartContent {
+        if let selectedIndex, let selectedValue = values[safe: selectedIndex] {
+            RuleMark(x: .value("Selected", selectedIndex))
+                .foregroundStyle(appModel.accentColor.opacity(0.22))
+
+            PointMark(
+                x: .value("Selected", selectedIndex),
+                y: .value("Steps", selectedValue.steps)
+            )
+            .foregroundStyle(appModel.accentColor)
+            .symbolSize(80)
+        }
+    }
+
+    private var lockedPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("CONNECT HEALTH")
+                .font(.system(size: 11, weight: .semibold, design: .default))
+                .tracking(2.0)
+                .foregroundStyle(appModel.accentColor)
+            Text("Trend views need Health data before analytics can be generated.")
+                .font(.system(size: 28, weight: .bold, design: .default))
+            Text("Once connected, you can move across days, weeks, and months from here.")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -156,12 +366,14 @@ struct TrendsView: View {
                         pendingDate = appModel.currentTrendSnapshot.periodStart
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(appModel.accentColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer()
             }
             .padding(20)
+            .background(SignalBackground())
             .navigationTitle(calendarTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -182,228 +394,9 @@ struct TrendsView: View {
                 }
             }
         }
+        .preferredColorScheme(appModel.preferredColorScheme)
         .presentationDetents([.fraction(0.82), .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private var detailSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(detailEyebrow)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(0.5)
-
-            Text(detailTitle)
-                .font(.title2.weight(.semibold))
-
-            Text(detailSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            chartView
-
-            Text("Press and drag across the chart to inspect a specific interval.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private var chartView: some View {
-        Group {
-            switch appModel.selectedTrendRange {
-            case .day:
-                Chart {
-                    ForEach(Array(appModel.trendHourlySteps.enumerated()), id: \.element.id) { index, item in
-                        BarMark(
-                            x: .value("Hour", index),
-                            y: .value("Steps", item.steps)
-                        )
-                        .foregroundStyle(barColor(for: index))
-                        .cornerRadius(6)
-                    }
-
-                    RuleMark(y: .value("Average Pace", averageHourlyPace))
-                        .foregroundStyle(Color.secondary.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .annotation(position: .top, alignment: .leading) {
-                            if selectedIndex == nil {
-                                Text("Avg")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                    if let peakHour, let peakHourIndex, selectedIndex == nil {
-                        PointMark(
-                            x: .value("Peak Hour", peakHourIndex),
-                            y: .value("Steps", peakHour.steps)
-                        )
-                        .foregroundStyle(appModel.accentColor)
-                        .symbolSize(85)
-                        .annotation(position: .top) {
-                            chartBadge(title: "Peak hour", value: "\(peakHour.steps.formatted())")
-                        }
-                    }
-
-                    if let selectedHour, let selectedIndex {
-                        RuleMark(x: .value("Selected Hour", selectedIndex))
-                            .foregroundStyle(appModel.accentColor.opacity(0.22))
-                        PointMark(
-                            x: .value("Selected Hour", selectedIndex),
-                            y: .value("Steps", selectedHour.steps)
-                        )
-                        .foregroundStyle(appModel.accentColor)
-                        .symbolSize(80)
-                    }
-                }
-                .chartXScale(domain: -0.5...23.5)
-                .chartXAxis {
-                    AxisMarks(values: [0, 6, 12, 18, 23]) { value in
-                        AxisValueLabel {
-                            if let index = value.as(Int.self), index >= 0, index < appModel.trendHourlySteps.count {
-                                Text(appModel.trendHourlySteps[index].hourLabel)
-                            }
-                        }
-                    }
-                }
-                .chartOverlay { proxy in
-                    selectionOverlay(proxy: proxy, itemCount: appModel.trendHourlySteps.count)
-                }
-
-            case .week:
-                Chart {
-                    ForEach(Array(appModel.trendDailySteps.enumerated()), id: \.element.id) { index, item in
-                        BarMark(
-                            x: .value("Day", index),
-                            y: .value("Steps", item.steps)
-                        )
-                        .foregroundStyle(barColor(for: index))
-                        .cornerRadius(7)
-                    }
-
-                    RuleMark(y: .value("Weekly Average", Double(appModel.trendAverageSteps)))
-                        .foregroundStyle(Color.secondary.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .annotation(position: .top, alignment: .leading) {
-                            if selectedIndex == nil {
-                                Text("Average")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                    if let bestWeekDay, let bestWeekDayIndex, selectedIndex == nil {
-                        PointMark(
-                            x: .value("Best Day", bestWeekDayIndex),
-                            y: .value("Steps", bestWeekDay.steps)
-                        )
-                        .foregroundStyle(appModel.accentColor)
-                        .symbolSize(85)
-                        .annotation(position: .top) {
-                            chartBadge(title: "Best day", value: bestWeekDay.label)
-                        }
-                    }
-
-                    if selectedDay != nil, let selectedIndex {
-                        RuleMark(x: .value("Selected Day", selectedIndex))
-                            .foregroundStyle(appModel.accentColor.opacity(0.22))
-                    }
-                }
-                .chartXScale(domain: -0.5...Double(max(appModel.trendDailySteps.count - 1, 0)) + 0.5)
-                .chartXAxis {
-                    AxisMarks(values: Array(appModel.trendDailySteps.indices)) { value in
-                        AxisValueLabel {
-                            if let index = value.as(Int.self), index >= 0, index < appModel.trendDailySteps.count {
-                                Text(appModel.trendDailySteps[index].label)
-                            }
-                        }
-                    }
-                }
-                .chartOverlay { proxy in
-                    selectionOverlay(proxy: proxy, itemCount: appModel.trendDailySteps.count)
-                }
-
-            case .month:
-                Chart {
-                    ForEach(Array(appModel.trendDailySteps.enumerated()), id: \.element.id) { index, item in
-                        BarMark(
-                            x: .value("Day", index),
-                            y: .value("Steps", item.steps)
-                        )
-                        .foregroundStyle(monthBarColor(for: index))
-                        .cornerRadius(4)
-                    }
-
-                    RuleMark(y: .value("Average", Double(appModel.trendAverageSteps)))
-                        .foregroundStyle(Color.secondary.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .annotation(position: .top, alignment: .leading) {
-                            if selectedIndex == nil {
-                                Text("Average")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                    if let bestMonthDay, let bestMonthDayIndex, selectedIndex == nil {
-                        PointMark(
-                            x: .value("Top Day", bestMonthDayIndex),
-                            y: .value("Steps", bestMonthDay.steps)
-                        )
-                        .foregroundStyle(appModel.accentColor)
-                        .symbolSize(85)
-                        .annotation(position: .top) {
-                            chartBadge(title: "Top day", value: bestMonthDay.label)
-                        }
-                    }
-
-                    if let selectedMonthDay, let selectedIndex {
-                        RuleMark(x: .value("Selected Day", selectedIndex))
-                            .foregroundStyle(appModel.accentColor.opacity(0.22))
-                        PointMark(
-                            x: .value("Selected Day", selectedIndex),
-                            y: .value("Steps", selectedMonthDay.steps)
-                        )
-                        .foregroundStyle(appModel.accentColor)
-                            .symbolSize(80)
-                    }
-                }
-                .chartXScale(domain: -0.5...Double(max(appModel.trendDailySteps.count - 1, 0)) + 0.5)
-                .chartXAxis {
-                    AxisMarks(values: stride(from: 0, to: appModel.trendDailySteps.count, by: max(appModel.trendDailySteps.count / 6, 1)).map { $0 }) { value in
-                        AxisValueLabel {
-                            if let index = value.as(Int.self), index >= 0, index < appModel.trendDailySteps.count {
-                                Text(appModel.trendDailySteps[index].label)
-                            }
-                        }
-                    }
-                }
-                .chartOverlay { proxy in
-                    selectionOverlay(proxy: proxy, itemCount: appModel.trendDailySteps.count)
-                }
-            }
-        }
-        .frame(height: 280)
-        .chartYAxis {
-            AxisMarks(position: .leading)
-        }
-    }
-
-    private var lockedSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Trends need step data")
-                .font(.title3.weight(.semibold))
-            Text("Connect Health from the Home tab to unlock hourly, weekly, and monthly analysis.")
-                .foregroundStyle(.secondary)
-        }
-        .padding(24)
-        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     private func selectionOverlay(proxy: ChartProxy, itemCount: Int) -> some View {
@@ -450,11 +443,10 @@ struct TrendsView: View {
         if selectedIndex != nil {
             return "SELECTED"
         }
-
         switch appModel.selectedTrendRange {
-        case .day: return "TODAY TOTAL"
-        case .week: return "THIS WEEK"
-        case .month: return "THIS MONTH"
+        case .day: return "DAY VIEW"
+        case .week: return "WEEK VIEW"
+        case .month: return "MONTH VIEW"
         }
     }
 
@@ -483,27 +475,27 @@ struct TrendsView: View {
         case .day:
             if let selectedHour {
                 let percent = appModel.currentTrendSnapshot.totalSteps > 0 ? Int((Double(selectedHour.steps) / Double(appModel.currentTrendSnapshot.totalSteps)) * 100) : 0
-                return "\(selectedHour.steps.formatted()) steps • \(percent)% of today"
+                return "\(selectedHour.steps.formatted()) steps. \(percent)% of this day."
             }
-            return "\(appModel.trendAverageSteps.formatted()) average per hour • Peak hour is highlighted on the chart."
+            return "\(appModel.trendAverageSteps.formatted()) average per hour. Peak hour is highlighted."
         case .week:
             if let selectedDay {
                 let delta = selectedDay.steps - appModel.trendAverageSteps
                 let prefix = delta >= 0 ? "+" : ""
-                return "\(selectedDay.steps.formatted()) steps • \(prefix)\(delta.formatted()) vs average"
+                return "\(selectedDay.steps.formatted()) steps. \(prefix)\(delta.formatted()) vs weekly average."
             }
-            return "\(appModel.trendAverageSteps.formatted()) average per day • Best day is highlighted on the chart."
+            return "\(appModel.trendAverageSteps.formatted()) average per day. Best day is highlighted."
         case .month:
             if let selectedMonthDay, let selectedIndex {
                 let previous = selectedIndex > 0 ? appModel.trendDailySteps[selectedIndex - 1].steps : nil
                 if let previous {
                     let delta = selectedMonthDay.steps - previous
                     let prefix = delta >= 0 ? "+" : ""
-                    return "\(selectedMonthDay.steps.formatted()) steps • \(prefix)\(delta.formatted()) vs previous day"
+                    return "\(selectedMonthDay.steps.formatted()) steps. \(prefix)\(delta.formatted()) vs previous day."
                 }
-                return "\(selectedMonthDay.steps.formatted()) steps"
+                return "\(selectedMonthDay.steps.formatted()) steps."
             }
-            return "\(appModel.trendAverageSteps.formatted()) average per day • Top day is highlighted on the chart."
+            return "\(appModel.trendAverageSteps.formatted()) average per day. Top day is highlighted."
         }
     }
 
@@ -521,15 +513,12 @@ struct TrendsView: View {
             case .month:
                 break
             }
-            return appModel.accentColor.opacity(0.68)
+            return appModel.accentColor.opacity(appModel.isDarkTheme ? 0.62 : 0.76)
         }
         if selectedIndex == index {
             return appModel.accentColor
         }
-        if selectedIndex != nil {
-            return appModel.accentColor.opacity(0.22)
-        }
-        return appModel.accentColor.opacity(0.82)
+        return appModel.accentColor.opacity(0.20)
     }
 
     private func monthBarColor(for index: Int) -> Color {
@@ -537,15 +526,39 @@ struct TrendsView: View {
             if let bestMonthDayIndex, index == bestMonthDayIndex {
                 return appModel.accentColor
             }
-            return appModel.accentColor.opacity(0.5)
+            return appModel.accentColor.opacity(appModel.isDarkTheme ? 0.44 : 0.58)
         }
         if selectedIndex == index {
             return appModel.accentColor
         }
-        if selectedIndex != nil {
-            return appModel.accentColor.opacity(0.22)
+        return appModel.accentColor.opacity(0.20)
+    }
+
+    private func chartBadge(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold, design: .default))
+                .foregroundStyle(appModel.accentColor)
+                .tracking(1.4)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .default))
+                .monospacedDigit()
         }
-        return appModel.accentColor.opacity(0.82)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.95 : 0.98))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                )
+        )
+    }
+
+    private func tickValues(for count: Int) -> [Int] {
+        let step = max(count / 6, 1)
+        return stride(from: 0, to: count, by: step).map { $0 }
     }
 
     private func formattedWeekday(_ date: Date) -> String {
@@ -560,6 +573,12 @@ struct TrendsView: View {
         return formatter.string(from: date)
     }
 
+    private func shortMonthDay(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+
     private func hourDisplay(for hour: Int) -> String {
         switch hour {
         case 0: return "12 AM"
@@ -567,19 +586,6 @@ struct TrendsView: View {
         case 13...23: return "\(hour - 12) PM"
         default: return "\(hour) AM"
         }
-    }
-
-    private func chartBadge(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var peakHourIndex: Int? {
@@ -618,7 +624,6 @@ struct TrendsView: View {
 
     private var periodTitle: String {
         let snapshot = appModel.currentTrendSnapshot
-
         switch appModel.selectedTrendRange {
         case .day:
             return formattedMonthDay(snapshot.periodStart)
@@ -629,12 +634,6 @@ struct TrendsView: View {
             formatter.dateFormat = "LLLL yyyy"
             return formatter.string(from: snapshot.periodStart)
         }
-    }
-
-    private func shortMonthDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
     }
 
     private var calendarTitle: String {
@@ -657,6 +656,36 @@ struct TrendsView: View {
         case .month:
             return "Pick any date inside the month you want to inspect."
         }
+    }
+}
+
+private struct CommonChartModifier: ViewModifier {
+    @EnvironmentObject private var appModel: AppModel
+
+    func body(content: Content) -> some View {
+        content
+            .frame(height: 280)
+            .chartYAxis {
+                AxisMarks(position: .leading)
+            }
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.42 : 0.60))
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

@@ -13,25 +13,24 @@ struct HomeView: View {
     @State private var selectedHourIndex: Int?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                heroHeader
-
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 32) {
                 if appModel.authorizationState == .readyToQuery {
-                    ringSection
-                    hourlySection
+                    heroSection
+                    chartSection
                     socialSection
                 } else {
                     permissionSection
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 36)
+            .padding(.top, 20)
+            .padding(.bottom, 40)
         }
-        .background(appModel.backgroundColor.ignoresSafeArea())
-        .navigationTitle("Today")
+        .background(SignalBackground())
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable {
             guard appModel.authorizationState == .readyToQuery else { return }
             selectedHourIndex = nil
@@ -39,55 +38,83 @@ struct HomeView: View {
         }
     }
 
-    private var heroHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Step Tracker")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(todayLabel.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(2.2)
+                .foregroundStyle(appModel.accentColor)
 
-            Text(headerSubtitle)
-                .font(.subheadline)
+            Text(heroCopy)
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
-        }
-    }
+                .fixedSize(horizontal: false, vertical: true)
 
-    private var ringSection: some View {
-        VStack(spacing: 18) {
             GoalRingView(
                 progress: appModel.todayProgress,
                 steps: appModel.todaySteps,
                 goal: appModel.dailyGoal,
-                accentColor: appModel.accentColor
+                accentColor: appModel.accentColor,
+                showsCenterLabel: true,
+                centerValue: appModel.todaySteps.formatted(),
+                centerSubtitle: "of \(appModel.dailyGoal.formatted()) goal"
             )
             .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+
+            goalSummaryRow
 
             if appModel.isLoading {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Refreshing your latest steps")
-                        .font(.subheadline)
+                    Text("Refreshing")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
             }
         }
     }
 
-    private var hourlySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Today by hour")
-                    .font(.title3.weight(.semibold))
-                Spacer()
-                Text(selectedHourSummaryTitle)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
+    private var goalSummaryRow: some View {
+        HStack(spacing: 18) {
+            goalMetric(title: "Complete", value: "\(Int(appModel.todayProgress * 100))%")
 
+            Rectangle()
+                .fill(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.06))
+                .frame(width: 1, height: 36)
+
+            goalMetric(title: "Left", value: remainingSteps.formatted())
+
+            Spacer()
+
+            Text(statusText)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(appModel.accentColor)
+        }
+        .padding(.top, 2)
+    }
+
+    private func goalMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.8)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .monospacedDigit()
+        }
+    }
+
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedHourTitle)
-                    .font(.headline)
+                    .font(.system(size: 30, weight: .bold))
+                    .monospacedDigit()
+
                 Text(selectedHourSubtitle)
-                    .font(.subheadline)
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -103,19 +130,12 @@ struct HomeView: View {
                     y: .value("Steps", item.steps)
                 )
                 .foregroundStyle(barColor(for: index))
-                .cornerRadius(6)
+                .cornerRadius(4)
             }
 
-            RuleMark(y: .value("Average Pace", averageHourlyPace))
-                .foregroundStyle(Color.secondary.opacity(0.45))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                .annotation(position: .top, alignment: .leading) {
-                    if selectedHourIndex == nil {
-                        Text("Avg")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            RuleMark(y: .value("Average", averageHourlyPace))
+                .foregroundStyle(Color.secondary.opacity(0.26))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
 
             if let peakHour, let peakHourIndex, selectedHourIndex == nil {
                 PointMark(
@@ -123,23 +143,22 @@ struct HomeView: View {
                     y: .value("Steps", peakHour.steps)
                 )
                 .foregroundStyle(appModel.accentColor)
-                .symbolSize(85)
+                .symbolSize(70)
                 .annotation(position: .top) {
-                    chartBadge(title: "Peak hour", value: "\(peakHour.steps.formatted())")
+                    chartBadge(title: "Peak", value: peakHour.steps.formatted())
                 }
             }
 
-            if let selectedHour {
-                RuleMark(x: .value("Selected Hour", selectedHourIndex ?? 0))
-                    .foregroundStyle(appModel.accentColor.opacity(0.22))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
+            if let selectedHour, let selectedHourIndex {
+                RuleMark(x: .value("Selected", selectedHourIndex))
+                    .foregroundStyle(appModel.accentColor.opacity(0.18))
 
                 PointMark(
-                    x: .value("Selected Hour", selectedHourIndex ?? 0),
+                    x: .value("Selected", selectedHourIndex),
                     y: .value("Steps", selectedHour.steps)
                 )
                 .foregroundStyle(appModel.accentColor)
-                .symbolSize(70)
+                .symbolSize(62)
             }
         }
         .chartXScale(domain: -0.5...23.5)
@@ -155,7 +174,19 @@ struct HomeView: View {
         .chartYAxis {
             AxisMarks(position: .leading)
         }
-        .frame(height: 240)
+        .frame(height: 248)
+        .chartPlotStyle { plotArea in
+            plotArea
+                .background(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.58 : 0.76))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 Rectangle()
@@ -171,8 +202,7 @@ struct HomeView: View {
 
                                 let bucketWidth = frame.width / CGFloat(max(appModel.hourlySteps.count, 1))
                                 let rawIndex = Int((locationX / bucketWidth).rounded(.down))
-                                let clampedIndex = min(max(rawIndex, 0), appModel.hourlySteps.count - 1)
-                                selectedHourIndex = clampedIndex
+                                selectedHourIndex = min(max(rawIndex, 0), appModel.hourlySteps.count - 1)
                             }
                             .onEnded { _ in
                                 selectedHourIndex = nil
@@ -183,38 +213,46 @@ struct HomeView: View {
     }
 
     private var socialSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Social")
-                .font(.title3.weight(.semibold))
-
-            if appModel.isSignedIn {
-                Text("You’re #\(appModel.currentUserStanding) among friends today.")
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(appModel.isSignedIn ? "Friends connected" : "Compare with friends later")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(appModel.isSignedIn ? "You are #\(appModel.currentUserStanding) today." : "Tracking works fully without an account.")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
-            } else {
-                Text("Use the tracker on your own, then sign in when you want to compare with friends.")
-                    .foregroundStyle(.secondary)
-
-                Button("Unlock social features") {
-                    appModel.toggleSignIn()
-                }
-                .buttonStyle(.bordered)
-                .tint(appModel.accentColor)
             }
+
+            Spacer()
+
+            Button(appModel.isSignedIn ? "Friends" : "Sign in") {
+                appModel.toggleSignIn()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(appModel.isSignedIn ? Color.primary : .white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(appModel.isSignedIn ? appModel.surfaceColor.opacity(0.76) : appModel.accentColor)
+            )
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
     }
 
     private var permissionSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Connect your step data")
-                .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 18) {
+            Text("STEP TRACKING")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(2.1)
+                .foregroundStyle(appModel.accentColor)
 
-            Text("The tracker works without login, but it needs Health access to read your daily, weekly, and hourly steps.")
-                .foregroundStyle(.secondary)
+            Text("Connect Health to start showing your steps in a clean daily view.")
+                .font(.system(size: 34, weight: .bold))
 
             if let errorMessage = appModel.errorMessage {
                 Text(errorMessage)
-                    .font(.subheadline)
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.red)
             }
 
@@ -228,9 +266,9 @@ struct HomeView: View {
                     }
 
                     Text(buttonTitle)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 15, weight: .semibold))
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
                 .padding(.vertical, 14)
             }
             .buttonStyle(.plain)
@@ -238,23 +276,17 @@ struct HomeView: View {
             .background(appModel.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .disabled(appModel.isLoading || appModel.authorizationState == .unavailable)
         }
-        .padding(24)
-        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.top, 10)
     }
 
     private var selectedHour: HourStepTotal? {
-        guard let selectedHourIndex else { return nil }
-        guard appModel.hourlySteps.indices.contains(selectedHourIndex) else { return nil }
+        guard let selectedHourIndex, appModel.hourlySteps.indices.contains(selectedHourIndex) else { return nil }
         return appModel.hourlySteps[selectedHourIndex]
-    }
-
-    private var selectedHourSummaryTitle: String {
-        selectedHour == nil ? "Press and drag" : "Selected interval"
     }
 
     private var selectedHourTitle: String {
         guard let selectedHour, let selectedHourIndex else {
-            return "Your hourly pattern"
+            return "Today by hour"
         }
 
         return hourRangeLabel(for: selectedHourIndex, fallback: selectedHour.hourLabel)
@@ -262,11 +294,11 @@ struct HomeView: View {
 
     private var selectedHourSubtitle: String {
         guard let selectedHour else {
-            return "\(Int(appModel.todayProgress * 100))% of goal • Peak hour is highlighted on the chart."
+            return "Press and drag across the chart to inspect a specific hour."
         }
 
         let percent = appModel.todaySteps > 0 ? Int((Double(selectedHour.steps) / Double(appModel.todaySteps)) * 100) : 0
-        return "\(selectedHour.steps.formatted()) steps • \(percent)% of today"
+        return "\(selectedHour.steps.formatted()) steps, \(percent)% of today."
     }
 
     private func hourRangeLabel(for index: Int, fallback: String) -> String {
@@ -290,50 +322,36 @@ struct HomeView: View {
             if let peakHourIndex, index == peakHourIndex {
                 return appModel.accentColor
             }
-            return appModel.accentColor.opacity(0.68)
+            return appModel.accentColor.opacity(appModel.isDarkTheme ? 0.62 : 0.74)
         }
 
         if selectedHourIndex == index {
             return appModel.accentColor
         }
 
-        if selectedHourIndex != nil {
-            return appModel.accentColor.opacity(0.22)
-        }
-
-        return appModel.accentColor.opacity(0.82)
-    }
-
-    private var headerSubtitle: String {
-        switch appModel.authorizationState {
-        case .readyToQuery:
-            return appModel.hasStepData ? "A cleaner look at your daily movement." : "Health is connected. Start moving to build today’s trend."
-        case .unavailable:
-            return "Health data is unavailable in this environment."
-        case .notDetermined:
-            return "Connect Health to start tracking your steps."
-        }
-    }
-
-    private var buttonTitle: String {
-        switch appModel.authorizationState {
-        case .notDetermined: return "Connect Health"
-        case .unavailable: return "Unavailable on this device"
-        case .readyToQuery: return "Connected"
-        }
+        return appModel.accentColor.opacity(0.18)
     }
 
     private func chartBadge(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(appModel.accentColor)
             Text(value)
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 12, weight: .bold))
+                .monospacedDigit()
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(appModel.secondarySurfaceColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(appModel.backgroundColor.opacity(appModel.isDarkTheme ? 0.94 : 0.98))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                )
+        )
     }
 
     private var peakHourIndex: Int? {
@@ -349,20 +367,32 @@ struct HomeView: View {
     private var averageHourlyPace: Double {
         Double(appModel.todaySteps) / 24.0
     }
-}
 
-struct InsightRow: View {
-    let title: String
-    let value: String
+    private var todayLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: .now)
+    }
 
-    var body: some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .fontWeight(.semibold)
-                .multilineTextAlignment(.trailing)
+    private var heroCopy: String {
+        appModel.hasStepData
+            ? "A simple, live readout of your movement."
+            : "Start moving and your daily trend will appear here."
+    }
+
+    private var remainingSteps: Int {
+        max(appModel.dailyGoal - appModel.todaySteps, 0)
+    }
+
+    private var statusText: String {
+        appModel.todaySteps >= appModel.dailyGoal ? "Goal cleared" : "In progress"
+    }
+
+    private var buttonTitle: String {
+        switch appModel.authorizationState {
+        case .notDetermined: return "Connect Health"
+        case .unavailable: return "Unavailable on this device"
+        case .readyToQuery: return "Connected"
         }
     }
 }

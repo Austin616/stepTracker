@@ -69,6 +69,19 @@ final class AppModel: ObservableObject {
     var secondarySurfaceColor: Color { usesCustomTheme ? customTheme.secondarySurfaceColor : selectedTheme.secondarySurface }
     var preferredColorScheme: ColorScheme { usesCustomTheme ? (customTheme.isDark ? .dark : .light) : selectedTheme.preferredColorScheme }
     var isDarkTheme: Bool { preferredColorScheme == .dark }
+    var themeRefreshKey: String {
+        if usesCustomTheme {
+            return [
+                customTheme.accentHex,
+                customTheme.backgroundHex,
+                customTheme.surfaceHex,
+                customTheme.secondarySurfaceHex,
+                customTheme.isDark.description
+            ].joined(separator: "|")
+        }
+
+        return selectedTheme.rawValue
+    }
 
     var todaySteps: Int {
         snapshot.todaySteps
