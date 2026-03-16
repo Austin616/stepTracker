@@ -15,16 +15,13 @@ struct TrendsView: View {
     @State private var pendingDate = Date()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                SignalHeader(
-                    eyebrow: "ANALYTICS",
-                    title: "Movement trends",
-                    subtitle: "Navigate across time and inspect your movement like a signal."
-                )
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                headerRow
 
                 if appModel.authorizationState == .readyToQuery {
-                    rangeStrip
+                    headerMeta
+                    rangeRow
                     periodStrip
                     detailSection
                     chartSection
@@ -48,83 +45,129 @@ struct TrendsView: View {
             selectedIndex = nil
             pendingDate = appModel.currentTrendSnapshot.periodStart
         }
-        .toolbar {
-            if appModel.authorizationState == .readyToQuery {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Today") {
-                        Task {
-                            selectedIndex = nil
-                            await appModel.resetTrendPeriodToCurrent()
-                            pendingDate = appModel.currentTrendSnapshot.periodStart
-                        }
-                    }
-                    .font(.system(size: 14, weight: .semibold, design: .default))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.78 : 0.84))
-                    )
-                    .disabled(!appModel.canMoveTrendForward)
-                    .opacity(appModel.canMoveTrendForward ? 1 : 0.45)
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        pendingDate = appModel.currentTrendSnapshot.periodStart
-                        isShowingCalendar = true
-                    } label: {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 15, weight: .semibold, design: .default))
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.78 : 0.84))
-                            )
-                    }
-                }
-            }
-        }
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: appModel.selectedTrendRange)
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: appModel.currentTrendSnapshot.periodStart)
+        .animation(.easeOut(duration: 0.18), value: selectedIndex)
         .sheet(isPresented: $isShowingCalendar) {
             trendCalendarSheet
         }
     }
 
-    private var rangeStrip: some View {
-        HStack(spacing: 8) {
-            ForEach(TrendRange.allCases) { range in
-                Button {
-                    appModel.selectedTrendRange = range
-                } label: {
-                    SignalChip(title: range.rawValue, isSelected: appModel.selectedTrendRange == range)
-                }
-                .buttonStyle(.plain)
+    private var headerRow: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("ANALYTICS")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(2.2)
+                    .foregroundStyle(appModel.accentColor)
+                Text("Movement trends")
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .kerning(-0.8)
+            }
+
+            Spacer()
+
+            if appModel.authorizationState == .readyToQuery {
+                headerActions
+                    .padding(.top, 4)
+                    .fixedSize()
             }
         }
     }
 
+    private var headerMeta: some View {
+        Text("One clean view for hourly, weekly, and monthly movement.")
+            .font(.system(size: 16, weight: .medium, design: .rounded))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 10) {
+            Button("Today") {
+                Task {
+                    selectedIndex = nil
+                    await appModel.resetTrendPeriodToCurrent()
+                    pendingDate = appModel.currentTrendSnapshot.periodStart
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(appModel.canMoveTrendForward ? Color.primary : .secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.62 : 0.82))
+            )
+            .disabled(!appModel.canMoveTrendForward)
+            .opacity(appModel.canMoveTrendForward ? 1 : 0.45)
+
+            Button {
+                pendingDate = appModel.currentTrendSnapshot.periodStart
+                isShowingCalendar = true
+            } label: {
+                Image(systemName: "calendar")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Circle()
+                            .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.62 : 0.82))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var rangeRow: some View {
+        HStack(spacing: 24) {
+            ForEach(TrendRange.allCases) { range in
+                Button {
+                    appModel.selectedTrendRange = range
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(range.rawValue)
+                            .font(.system(size: 24, weight: appModel.selectedTrendRange == range ? .bold : .semibold))
+                            .foregroundStyle(appModel.selectedTrendRange == range ? Color.primary : .secondary)
+
+                        Capsule(style: .continuous)
+                            .fill(appModel.selectedTrendRange == range ? appModel.accentColor : Color.primary.opacity(0.10))
+                            .frame(width: appModel.selectedTrendRange == range ? 30 : 16, height: 3)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
     private var periodStrip: some View {
-        HStack {
+        HStack(spacing: 18) {
             navButton(systemName: "chevron.left") {
                 Task {
                     selectedIndex = nil
                     await appModel.moveTrendPeriod(by: -1)
                 }
             }
+            .frame(width: 38)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             VStack(spacing: 4) {
-                Text("PERIOD")
-                    .font(.system(size: 10, weight: .semibold, design: .default))
+                Text(periodLabel)
+                    .font(.system(size: 11, weight: .semibold, design: .default))
                     .tracking(1.8)
                     .foregroundStyle(appModel.accentColor)
                 Text(periodTitle)
-                    .font(.system(size: 19, weight: .bold, design: .default))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .kerning(-0.4)
                     .monospacedDigit()
+                    .lineLimit(2)
+                    .contentTransition(.numericText())
+                    .multilineTextAlignment(.center)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             navButton(systemName: "chevron.right", disabled: !appModel.canMoveTrendForward) {
                 Task {
@@ -132,6 +175,7 @@ struct TrendsView: View {
                     await appModel.moveTrendPeriod(by: 1)
                 }
             }
+            .frame(width: 38)
         }
     }
 
@@ -139,11 +183,11 @@ struct TrendsView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold, design: .default))
-                .frame(width: 42, height: 42)
-                .background(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.92 : 0.98), in: Circle())
-                .overlay(
+                .foregroundStyle(disabled ? .secondary : Color.primary)
+                .frame(width: 38, height: 38)
+                .background(
                     Circle()
-                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                        .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.50 : 0.68))
                 )
         }
         .buttonStyle(.plain)
@@ -153,26 +197,32 @@ struct TrendsView: View {
 
     private var detailSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(detailEyebrow)
-                .font(.system(size: 11, weight: .semibold, design: .default))
-                .tracking(2.0)
-                .foregroundStyle(appModel.accentColor)
-
             Text(detailTitle)
-                .font(.system(size: 42, weight: .bold, design: .default))
+                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .kerning(-1.0)
                 .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.numericText())
 
             Text(detailSubtitle)
-                .font(.system(size: 15, weight: .medium, design: .default))
+                .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            chartView
+        VStack(alignment: .leading, spacing: 12) {
+            Text(chartTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(1.8)
+                .foregroundStyle(appModel.accentColor)
 
-            Text("Press and drag to inspect each interval.")
+            chartView
+                .id(appModel.selectedTrendRange)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+
+            Text("Press and drag across the chart to inspect each interval.")
                 .font(.system(size: 13, weight: .medium, design: .default))
                 .foregroundStyle(.secondary)
         }
@@ -245,6 +295,8 @@ struct TrendsView: View {
         .chartOverlay { proxy in
             selectionOverlay(proxy: proxy, itemCount: appModel.trendHourlySteps.count)
         }
+        .animation(.easeInOut(duration: 0.28), value: appModel.currentTrendSnapshot.totalSteps)
+        .animation(.easeInOut(duration: 0.20), value: selectedIndex)
     }
 
     private func dailyChart(values: [DayStepTotal], average: Double, badgeTitle: String, badgeValue: String, bestIndex: Int?, narrow: Bool = false) -> some View {
@@ -272,6 +324,8 @@ struct TrendsView: View {
         .chartOverlay { proxy in
             selectionOverlay(proxy: proxy, itemCount: values.count)
         }
+        .animation(.easeInOut(duration: 0.28), value: appModel.currentTrendSnapshot.totalSteps)
+        .animation(.easeInOut(duration: 0.20), value: selectedIndex)
     }
 
     private func dailyBarColor(for index: Int, narrow: Bool) -> Color {
@@ -439,17 +493,6 @@ struct TrendsView: View {
         return appModel.trendDailySteps[selectedIndex]
     }
 
-    private var detailEyebrow: String {
-        if selectedIndex != nil {
-            return "SELECTED"
-        }
-        switch appModel.selectedTrendRange {
-        case .day: return "DAY VIEW"
-        case .week: return "WEEK VIEW"
-        case .month: return "MONTH VIEW"
-        }
-    }
-
     private var detailTitle: String {
         switch appModel.selectedTrendRange {
         case .day:
@@ -477,7 +520,7 @@ struct TrendsView: View {
                 let percent = appModel.currentTrendSnapshot.totalSteps > 0 ? Int((Double(selectedHour.steps) / Double(appModel.currentTrendSnapshot.totalSteps)) * 100) : 0
                 return "\(selectedHour.steps.formatted()) steps. \(percent)% of this day."
             }
-            return "\(appModel.trendAverageSteps.formatted()) average per hour. Peak hour is highlighted."
+            return "\(appModel.trendAverageSteps.formatted()) average per hour. Peak hour is highlighted directly on the chart."
         case .week:
             if let selectedDay {
                 let delta = selectedDay.steps - appModel.trendAverageSteps
@@ -636,6 +679,28 @@ struct TrendsView: View {
         }
     }
 
+    private var periodLabel: String {
+        switch appModel.selectedTrendRange {
+        case .day:
+            return "DAY"
+        case .week:
+            return "WEEK"
+        case .month:
+            return "MONTH"
+        }
+    }
+
+    private var chartTitle: String {
+        switch appModel.selectedTrendRange {
+        case .day:
+            return "HOURLY BREAKDOWN"
+        case .week:
+            return "DAILY BREAKDOWN"
+        case .month:
+            return "MONTHLY BREAKDOWN"
+        }
+    }
+
     private var calendarTitle: String {
         switch appModel.selectedTrendRange {
         case .day:
@@ -672,11 +737,22 @@ private struct CommonChartModifier: ViewModifier {
                 plotArea
                     .background(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(appModel.secondarySurfaceColor.opacity(appModel.isDarkTheme ? 0.42 : 0.60))
+                            .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.40 : 0.56))
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                            .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.06 : 0.04), lineWidth: 1)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        LinearGradient(
+                            colors: [
+                                appModel.accentColor.opacity(appModel.isDarkTheme ? 0.14 : 0.08),
+                                .clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             }

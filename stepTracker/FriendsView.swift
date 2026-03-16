@@ -16,6 +16,7 @@ struct FriendsView: View {
                 header
 
                 if appModel.isSignedIn {
+                    heroSummary
                     leaderboardSection
                     socialActionsSection
                 } else {
@@ -26,39 +27,67 @@ struct FriendsView: View {
             .padding(.top, 16)
             .padding(.bottom, 36)
         }
-        .background(appModel.backgroundColor.ignoresSafeArea())
-        .navigationTitle("Friends")
+        .background(SignalBackground())
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Friends")
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Compare your steps when you want the social layer.")
-                .font(.subheadline)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("FRIENDS")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(2.2)
+                .foregroundStyle(appModel.accentColor)
+            Text("Step together.")
+                .font(.system(size: 42, weight: .bold))
+            Text("A lightweight social layer when you want rankings and comparison.")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var heroSummary: some View {
+        HStack(alignment: .bottom, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("#\(appModel.currentUserStanding)")
+                    .font(.system(size: 64, weight: .bold))
+                    .monospacedDigit()
+                Text("your position today")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(appModel.todaySteps.formatted())
+                    .font(.system(size: 28, weight: .bold))
+                    .monospacedDigit()
+                Text("steps")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var guestSection: some View {
         VStack(alignment: .leading, spacing: 20) {
-            StepCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Social is optional")
-                        .font(.title2.weight(.semibold))
-                    Text("Track steps on your own first. Sign in only when you want rankings, friend comparisons, or simple competitions.")
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Social is optional")
+                    .font(.system(size: 28, weight: .bold))
+                Text("Track steps on your own first. Sign in only when you want rankings, friend comparisons, or simple competitions.")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
 
-                    Button("Sign in to unlock friends") {
-                        appModel.toggleSignIn()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background(appModel.accentColor, in: Capsule())
+                Button("Sign in to unlock friends") {
+                    appModel.toggleSignIn()
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(appModel.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 14) {
@@ -71,8 +100,8 @@ struct FriendsView: View {
 
     private var leaderboardSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Today’s leaderboard")
-                .font(.title3.weight(.semibold))
+            Text("Today")
+                .font(.system(size: 30, weight: .bold))
 
             VStack(spacing: 12) {
                 ForEach(appModel.leaderboard.indices, id: \.self) { index in
@@ -110,26 +139,37 @@ struct FriendsView: View {
             Spacer()
 
             Text(friend.steps.formatted())
-                .font(.headline.monospacedDigit())
+                .font(.system(size: 22, weight: .bold).monospacedDigit())
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(friend.isCurrentUser ? appModel.accentColor.opacity(0.12) : appModel.secondarySurfaceColor)
+                .fill(friend.isCurrentUser ? appModel.accentColor.opacity(0.12) : appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.62 : 0.74))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                )
         )
     }
 
     private var socialActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Account")
-                .font(.title3.weight(.semibold))
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Social mode is active")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Turn it off any time and keep the local tracker flow.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
 
             Button("Sign out of social mode") {
                 appModel.toggleSignIn()
             }
-            .buttonStyle(.bordered)
-            .tint(appModel.accentColor)
+            .buttonStyle(.plain)
+            .foregroundStyle(appModel.accentColor)
         }
     }
 

@@ -107,11 +107,17 @@ struct HomeView: View {
     }
 
     private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("HOURLY BREAKDOWN")
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(1.8)
+                .foregroundStyle(appModel.accentColor)
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedHourTitle)
                     .font(.system(size: 30, weight: .bold))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
 
                 Text(selectedHourSubtitle)
                     .font(.system(size: 15, weight: .medium))
@@ -174,18 +180,29 @@ struct HomeView: View {
         .chartYAxis {
             AxisMarks(position: .leading)
         }
-        .frame(height: 248)
+        .frame(height: 280)
         .chartPlotStyle { plotArea in
             plotArea
                 .background(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.58 : 0.76))
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(appModel.surfaceColor.opacity(appModel.isDarkTheme ? 0.40 : 0.56))
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.08 : 0.05), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.primary.opacity(appModel.isDarkTheme ? 0.06 : 0.04), lineWidth: 1)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .overlay(alignment: .topLeading) {
+                    LinearGradient(
+                        colors: [
+                            appModel.accentColor.opacity(appModel.isDarkTheme ? 0.14 : 0.08),
+                            .clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .chartOverlay { proxy in
             GeometryReader { geometry in
@@ -210,6 +227,8 @@ struct HomeView: View {
                     )
             }
         }
+        .animation(.easeInOut(duration: 0.28), value: appModel.todaySteps)
+        .animation(.easeInOut(duration: 0.20), value: selectedHourIndex)
     }
 
     private var socialSection: some View {

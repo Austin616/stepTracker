@@ -239,6 +239,12 @@ final class AppModel: ObservableObject {
         usesCustomTheme = true
     }
 
+    func deleteCustomTheme() {
+        customTheme = .default
+        usesCustomTheme = false
+        UserDefaults.standard.removeObject(forKey: Self.customThemeDataKey)
+    }
+
     var customThemeAccent: Color { customTheme.accentColor }
     var customThemeBackground: Color { customTheme.backgroundColor }
     var customThemeSurface: Color { customTheme.surfaceColor }
