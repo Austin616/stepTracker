@@ -50,6 +50,10 @@ struct ContentView: View {
         .task {
             await appModel.prepareIfNeeded()
         }
+        .sheet(isPresented: $appModel.isShowingAuthFlow) {
+            AuthFlowView()
+                .environmentObject(appModel)
+        }
     }
 
     private func configureTabBarAppearance() {

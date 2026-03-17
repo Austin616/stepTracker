@@ -6,10 +6,12 @@
 //
 
 import Combine
+import OSLog
 import SwiftUI
 
 @MainActor
 final class AppModel: ObservableObject {
+    private let logger = Logger(subsystem: "com.austintran.stepTracker", category: "auth")
     @Published var selectedTheme: AppTheme {
         didSet {
             UserDefaults.standard.set(selectedTheme.rawValue, forKey: Self.themeDefaultsKey)
@@ -32,6 +34,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var trendSnapshots: [TrendRange: TrendSnapshot] = [:]
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var authProviderName: String
+    @Published private(set) var isFirebaseConfigured: Bool
+    @Published var isShowingAuthFlow = false
+    @Published private(set) var authFlowErrorMessage: String?
+    @Published private(set) var isAuthSubmitting = false
     private var customTheme: CustomThemeData {
         didSet {
             if let encoded = try? JSONEncoder().encode(customTheme) {
@@ -43,6 +50,7 @@ final class AppModel: ObservableObject {
     let profile = UserProfile(name: "Austin", initials: "AT")
 
     private let stepDataService: StepDataProviding
+    private var authService: AuthProviding?
     private var hasPrepared = false
     private static let themeDefaultsKey = "selectedTheme"
     private static let customThemeEnabledKey = "usesCustomTheme"
@@ -61,6 +69,9 @@ final class AppModel: ObservableObject {
         }
         authorizationState = .notDetermined
         snapshot = StepSnapshot.empty
+        authProviderName = "Local"
+        isFirebaseConfigured = false
+        isSignedIn = false
     }
 
     var accentColor: Color { usesCustomTheme ? customTheme.accentColor : selectedTheme.accent }
@@ -168,6 +179,7 @@ final class AppModel: ObservableObject {
     func prepareIfNeeded() async {
         guard !hasPrepared else { return }
         hasPrepared = true
+        refreshAuthState()
         authorizationState = await stepDataService.authorizationState()
 
         if authorizationState == .readyToQuery {
@@ -221,7 +233,153 @@ final class AppModel: ObservableObject {
     }
 
     func toggleSignIn() {
-        isSignedIn.toggle()
+        if !isSignedIn {
+            presentAuthFlow()
+            return
+        }
+        Task {
+            await toggleSignInAsync()
+        }
+    }
+
+    func presentAuthFlow() {
+        authFlowErrorMessage = nil
+        isShowingAuthFlow = true
+    }
+
+    func dismissAuthFlow() {
+        authFlowErrorMessage = nil
+        isShowingAuthFlow = false
+    }
+
+    func clearAuthFlowError() {
+        authFlowErrorMessage = nil
+    }
+
+    private func toggleSignInAsync() async {
+        errorMessage = nil
+        let authService = resolvedAuthService()
+        logAuthState(prefix: "Sign-in tapped")
+
+        if isSignedIn {
+            do {
+                try authService.signOut()
+                isSignedIn = false
+                logger.info("Sign-out succeeded. provider=\(self.authProviderName, privacy: .public)")
+            } catch {
+                logger.error("Sign-out failed: \(String(describing: error), privacy: .public)")
+                errorMessage = "Couldn’t sign out right now."
+            }
+            return
+        }
+
+        do {
+            _ = try await authService.signInForSocialMode()
+            isSignedIn = true
+            authProviderName = authService.providerName
+            isFirebaseConfigured = FirebaseBootstrap.isConfigured
+            logger.info("Sign-in succeeded. provider=\(self.authProviderName, privacy: .public) firebaseConfigured=\(self.isFirebaseConfigured)")
+        } catch {
+            let nsError = error as NSError
+            logger.error(
+                """
+                Sign-in failed. provider=\(authService.providerName, privacy: .public) \
+                firebaseConfigured=\(FirebaseBootstrap.isConfigured) \
+                hasGoogleServiceInfo=\(FirebaseBootstrap.hasGoogleServiceInfo) \
+                errorDomain=\(nsError.domain, privacy: .public) \
+                errorCode=\(nsError.code) \
+                description=\(error.localizedDescription, privacy: .public)
+                """
+            )
+            errorMessage = "Couldn’t sign in right now. Check Xcode console for the auth error."
+        }
+    }
+
+    func signInWithEmail(email: String, password: String) async {
+        await performCredentialAuth(action: "Email sign-in") { authService in
+            try await authService.signIn(email: email, password: password)
+        }
+    }
+
+    func createAccount(email: String, password: String) async {
+        await performCredentialAuth(action: "Email sign-up") { authService in
+            try await authService.createAccount(email: email, password: password)
+        }
+    }
+
+    func signInWithGoogle() {
+        authFlowErrorMessage = "Google sign-in still needs the GoogleSignIn SDK and URL scheme wiring."
+        logger.error("Google sign-in tapped but GoogleSignIn is not wired in this build.")
+    }
+
+    private func performCredentialAuth(
+        action: String,
+        operation: @escaping (AuthProviding) async throws -> AuthSession
+    ) async {
+        let authService = resolvedAuthService()
+        authFlowErrorMessage = nil
+        isAuthSubmitting = true
+        logAuthState(prefix: action)
+
+        do {
+            _ = try await operation(authService)
+            isSignedIn = true
+            authProviderName = authService.providerName
+            isFirebaseConfigured = FirebaseBootstrap.isConfigured
+            isShowingAuthFlow = false
+            logger.info("\(action, privacy: .public) succeeded. provider=\(self.authProviderName, privacy: .public)")
+        } catch {
+            let nsError = error as NSError
+            authFlowErrorMessage = error.localizedDescription
+            logger.error(
+                """
+                \(action, privacy: .public) failed. provider=\(authService.providerName, privacy: .public) \
+                firebaseConfigured=\(FirebaseBootstrap.isConfigured) \
+                hasGoogleServiceInfo=\(FirebaseBootstrap.hasGoogleServiceInfo) \
+                errorDomain=\(nsError.domain, privacy: .public) \
+                errorCode=\(nsError.code) \
+                description=\(error.localizedDescription, privacy: .public)
+                """
+            )
+        }
+
+        isAuthSubmitting = false
+    }
+
+    private func resolvedAuthService() -> AuthProviding {
+        if let authService {
+            if FirebaseBootstrap.isConfigured, authService.providerName == "Local" {
+                let upgraded = AuthServiceFactory.make()
+                self.authService = upgraded
+                return upgraded
+            }
+            return authService
+        }
+
+        let created = AuthServiceFactory.make()
+        authService = created
+        return created
+    }
+
+    private func refreshAuthState() {
+        let authService = resolvedAuthService()
+        authProviderName = authService.providerName
+        isFirebaseConfigured = FirebaseBootstrap.isConfigured
+        isSignedIn = authService.currentSession() != nil
+        logAuthState(prefix: "Auth state refreshed")
+    }
+
+    private func logAuthState(prefix: String) {
+        logger.info(
+            """
+            \(prefix, privacy: .public). \
+            provider=\(self.authProviderName, privacy: .public) \
+            firebaseSDKAvailable=\(FirebaseBootstrap.isFirebaseSDKAvailable) \
+            firebaseConfigured=\(FirebaseBootstrap.isConfigured) \
+            hasGoogleServiceInfo=\(FirebaseBootstrap.hasGoogleServiceInfo) \
+            isSignedIn=\(self.isSignedIn)
+            """
+        )
     }
 
     func applyTheme(_ theme: AppTheme) {
